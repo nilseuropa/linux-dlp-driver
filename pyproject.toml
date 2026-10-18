@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "linux-dlp-driver"
+version = "0.1.0"
+description = "Linux DRM monitor bridge for Display Link Protocol USB and TCP displays"
+requires-python = ">=3.10"
+dependencies = ["Pillow>=9.1", "pyserial>=3.5"]
+license = {text = "MIT"}
+
+[project.scripts]
+linux-dlp-driver = "linux_dlp_driver.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["linux_dlp_driver*"]
