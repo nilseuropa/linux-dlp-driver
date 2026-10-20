@@ -96,7 +96,8 @@ def open_transport(args):
 
 
 def connect(port, args):
-    link = DisplayLink(port, compact=not args.legacy_cells, pixel_format=args.pixel_format)
+    link = DisplayLink(port, compact=not args.legacy_cells, pixel_format=args.pixel_format,
+                       compressed=args.compressed)
     if args.no_window:
         link.requested_window = 0
     link.connect()
@@ -172,6 +173,8 @@ def parser():
     p.add_argument("--evdi-device", type=int, help="Existing EVDI card number, e.g. 3 for /dev/dri/card3")
     p.add_argument("--legacy-cells", action="store_true", help="Force fixed 256-byte SDLP framing")
     p.add_argument("--no-window", action="store_true", help="Disable window negotiation")
+    p.add_argument("--compressed", action="store_true",
+                   help="Enable negotiated lossless LZ4 blocks with raw/RLE fallback")
     p.add_argument("--once", action="store_true", help="Exit on disconnect/error instead of reconnecting")
     return p
 

@@ -19,6 +19,7 @@ CELL_SIZE = 256
 OK, BUSY, BAD_SESSION, STALE_BOOT = 0, 4, 5, 6
 GET_INFO, CONFIGURE, GET_STATUS = 1, 2, 3
 GET_EXTENSIONS, GET_SYNC, RECT_RLE = 4, 5, 0x15
+GET_CODECS, RECT_LZ4, LZ4 = 8, 0x16, 128
 NEGOTIATE_WINDOW, WINDOW_SYNC, PUSH = 6, 7, 3
 WINDOW_VERSION, MAX_WINDOW = 2, 16
 PRESERVE_CONTENT, RLE, SYNC = 1, 32, 64
@@ -182,10 +183,12 @@ class DisplayLink:
     Serial ports, USB CDC, socket/file adapters and in-process pipes all use
     the same client. Serialize calls; retained image state is per session.
     """
-    def __init__(self, port, timeout=2.0, compact=True, pixel_format="auto"):
+    def __init__(self, port, timeout=2.0, compact=True, pixel_format="auto", *, compressed=False):
         if pixel_format not in ("auto", *FORMAT_NAMES.values()):
             raise ValueError("Pixel format must be auto, mono1 or rgb565")
         self.requested_format = pixel_format
+        self.compressed = compressed
+        self._lz4 = None
         self.pixel_format = MONO1
         self.formats = 0
         self.port = port
@@ -336,6 +339,21 @@ class DisplayLink:
         except ProtocolError as error:
             if error.result != 1:
                 raise
+        if self.compressed:
+            try:
+                codecs = self.command(GET_CODECS).payload
+                if len(codecs) != 4 or struct.unpack("<I", codecs)[0] & ~LZ4:
+                    raise ValueError("Invalid DLP codecs")
+                self.capabilities |= struct.unpack("<I", codecs)[0]
+            except ProtocolError as error:
+                if error.result != 1:
+                    raise
+            if self.capabilities & LZ4:
+                try:
+                    from lz4.block import compress
+                except ImportError as error:
+                    raise RuntimeError("LZ4 compression requires the Python lz4 package") from error
+                self._lz4 = compress
         if self.requested_window:
             try:
                 p = self.command(NEGOTIATE_WINDOW, struct.pack(
@@ -496,6 +514,17 @@ class DisplayLink:
                         if consumed > raw or (consumed == raw and len(encoded) + 2 < raw):
                             op, used = RECT_RLE, consumed
                             payload = struct.pack("<H", consumed) + encoded
+                    if self.compressed and self.capabilities & LZ4:
+                        limit = min(1024, len(data) - offset)
+                        while True:
+                            encoded = self._lz4(data[offset:offset + limit], store_size=False)
+                            if len(encoded) <= 206 and (limit > used or (
+                                    limit == used and len(encoded) + 2 < len(payload))):
+                                op, used = RECT_LZ4, limit
+                                payload = struct.pack("<H", limit) + encoded
+                            if limit <= used:
+                                break
+                            limit = max(used, limit // 2)
                     self._upload_command(op, struct.pack("<III", f, rect, offset) + payload)
                     offset += used
             uploaded = time.monotonic()

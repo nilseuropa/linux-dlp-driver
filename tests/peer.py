@@ -9,11 +9,12 @@ import zlib
 
 class Peer:
     def __init__(self, read, write, close, *, width=13, height=2, formats=1,
-                 max_rect_bytes=None, rle=False):
+                 max_rect_bytes=None, rle=False, lz4=False):
         self.read, self.write, self.close_io = read, write, close
         self.width, self.height, self.formats = width, height, formats
         self.format = 0
         self.rle = rle
+        self.lz4 = lz4
         self.max_rect_bytes = max_rect_bytes or (width * 2 if formats & 16 else (width + 7) // 8) * height
         self.rectangles = []
         self.buffer = bytearray()
@@ -49,14 +50,16 @@ class Peer:
             self.pixels = bytearray(self.stride * self.height)
         elif op == 4 and self.rle:
             payload = struct.pack("<I", 32)
-        elif op in (4, 6):
+        elif op == 8 and self.lz4:
+            payload = struct.pack("<I", 128)
+        elif op in (4, 6, 8):
             result = 1  # unsupported: exercise legacy fallback
         elif op == 0x10:
             self.frame = struct.unpack_from("<I", p)[0]
         elif op == 0x11:
             _, _, self.x, self.y, self.w, self.h = struct.unpack("<IIHHHH", p)
             self.rectangles.append((self.x, self.y, self.w, self.h))
-        elif op in (0x12, 0x15):
+        elif op in (0x12, 0x15, 0x16):
             _, _, offset = struct.unpack_from("<III", p)
             data = p[12:]
             if op == 0x15:
@@ -73,6 +76,12 @@ class Peer:
                         at += tag + 1
                 assert len(output) == count
                 data = output
+            elif op == 0x16:
+                from lz4.block import decompress
+                count = struct.unpack_from("<H", data)[0]
+                assert 0 < count <= 1024
+                data = decompress(data[2:], uncompressed_size=count)
+                assert len(data) == count
             row = self.w * 2 if self.format == 4 else (self.w + 7) // 8
             xbyte = self.x * 2 if self.format == 4 else self.x // 8
             for at, value in enumerate(data, offset):

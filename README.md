@@ -16,7 +16,7 @@ stream, with a receiver already listening (no telnet, HTTP or TLS wrapper).
 
 ## Install
 
-Python 3.10+, Pillow, pyserial, libevdi 1.14/1.15, and a matching EVDI kernel
+Python 3.10+, Pillow, pyserial, lz4, libevdi 1.14/1.15, and a matching EVDI kernel
 module are required. On Debian/Ubuntu:
 
 ```sh
@@ -64,6 +64,9 @@ existing EVDI card explicitly; otherwise libevdi finds an available one.
 # Advertise the panel's native resolution as a Linux monitor.
 .venv/bin/linux-dlp-driver --port /dev/ttyACM1
 
+# Enable negotiated lossless LZ4 compression.
+.venv/bin/linux-dlp-driver --port /dev/ttyACM1 --compressed
+
 # A color receiver; auto negotiation selects RGB565 when supported.
 .venv/bin/linux-dlp-driver --port /dev/ttyACM0
 
@@ -89,6 +92,13 @@ monochrome gradients; the default threshold conversion keeps text and flat
 areas stable. Dithering does not apply to RGB565. `--invert` inverts desktop
 colors or luminance. Color uses two bytes per pixel; it can update more slowly
 than monochrome on the same link.
+
+`--compressed` enables independent lossless LZ4 blocks when the receiver
+supports them. Each block uses raw, RLE, or LZ4 according to what fits best;
+incompressible data stays raw. Without the option, the existing raw/RLE path
+is retained. Older receivers fall back automatically. The option works over
+USB and TCP and is reapplied on reconnect. It changes neither color depth nor
+pixel values. The receiver needs no compression setting.
 
 EVDI integration depends on your desktop/compositor. On Xorg, if the output
 does not appear automatically, inspect `xrandr --listproviders`. Connect the

@@ -7,7 +7,7 @@ name = "linux-dlp-driver"
 version = "0.1.0"
 description = "Linux DRM monitor bridge for Display Link Protocol USB and TCP displays"
 requires-python = ">=3.10"
-dependencies = ["Pillow>=9.1", "pyserial>=3.5"]
+dependencies = ["Pillow>=9.1", "pyserial>=3.5", "lz4>=4.3"]
 license = {text = "MIT"}
 
 [project.scripts]
